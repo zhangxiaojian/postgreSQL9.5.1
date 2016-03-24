@@ -1,2 +1,2 @@
-# postgreSQL9.5.1
-Add some new feather to postgreSQL 9.5.1
+###改进vacuum垃圾回收工作进程。允许vacuum回收大于当前最小事务快照或未结束事务号的不需要的tuple版本.
+ 
