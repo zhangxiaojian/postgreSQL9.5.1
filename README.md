@@ -33,8 +33,8 @@ GetOldestXmin这个函数负责返回OldestXmin值，需要修改其中的策略
 |GetOldestXminVacuumOptimized	|procArray.c|(1298~1499)    |
 |      									              |procArray.h|(55)           |
 |vacuum_set_xid_limits				    |vacuum.c		 |(492)          |
-####五 不足之处
 
-*测试用例有限，在GetOldestXmin中有很多处理分支，包括replication_slot_xmin等参数都没有搞明白是干什么的。
-*设置隔离级别的时机，在exec_simple_query中不一定合适。
-*其它过程的函数都有很多处理分支并未完全明白，也许会有影响
+####五 不足之处
+1.测试用例有限，在GetOldestXmin中有很多处理分支，包括replication_slot_xmin等参数都没有搞明白是干什么的。
+2.设置隔离级别的时机，在exec_simple_query中不一定合适。
+3.其它过程的函数都有很多处理分支并未完全明白，也许会有影响
