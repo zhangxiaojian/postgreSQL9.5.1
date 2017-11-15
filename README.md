@@ -1,7 +1,7 @@
 **问题**：改进vacuum垃圾回收工作进程。允许vacuum回收大于当前最小事务快照或未结束事务号的不需要的tuple版本.
 
 
-####一 问题分析
+### 一 问题分析
 由于多版本并发控制的影响，PG中对于删除的tuple采用标记删除的方式，删除或更新产生的垃圾元组由vacuum机制负责回收，对于元组的删除，只是标记了 HeapTupleFields 中的t_xmax,表示删除这个tuple的事务号，但是vacuum负责删除ItemIdData中标记了dead的tuple。ItemIdData是在page内指向元组的指针
 
 ![page](http://www.zhangxiaojian.name/wp-content/uploads/2016/03/page.png)
@@ -12,7 +12,7 @@ Linp的标记改变是在vacuum中完成的，具体是在heap_page_prune中，�
 
 分析到这，问题的关键就是修改获得OldestXmin这个值得策略，要获得隔离级别大于repeatableread的所有活动事务的的OldestXmin，用这个值来判断一个tuple是否该标记为dead被vacuum回收。
 
-####二 解决策略
+### 二 解决策略
 GetOldestXmin这个函数负责返回OldestXmin值，需要修改其中的策略。原有策略比较简单，遍历共享内存变量中的 allProcs 和 allPgXact，取出每一个进程，判断进程访问的数据库是否是vacuum当前要清理的数据库，取出每一个活动的事务，找出访问当前数据库的最老的一个xid，作为GetOldestXmin的返回值。
 
 问题关键在于除了获得活动事务的xid，还要获得事务的隔离级别，小于repeatable read的事务可以忽略不计。但是原本的PGPROC 和 PGXACT 结构中并没有包含隔离级别的信息，需要自己添加。按照常理，应该放到PGXACT结构中，毕竟隔离级别是与每个事务有关。可是看源码中关于PGXACT的注释，貌似用到了比较黑的科技，可以充分利用多核CPU来加速（唐成老师貌似提到过），特别注明要非常慎重的修改这个结构。于是就打算放到PGPROC中，一个进程每个时刻也只会有一个顶层事务运转。添加之后，引起一连串错误，甚至initdb命令都会受到影响，波及范围太广。这时候灵光一闪：发现PGXACT结构中的vacuumFlags是一个unit8类型的变量，但是它的标记位只用到了前5位，我可以利用后面的3位来标记一个事务的隔离级别！
@@ -21,7 +21,7 @@ GetOldestXmin这个函数负责返回OldestXmin值，需要修改其中的策略
 
 好了，每个进程通过共享内存set隔离级别位，vacuum的时候根据隔离级别判断OldestXmin，传给HeapTupleSatisfiesVacuum之后，就可以返回没有用的dead tuple，标记Linp为dead，vacuum后续根据这个dead标记，标记unuse，进行内存整理，就完成了一次优化过vacuum。
 
-####三 效果
+### 三 效果
 ![result](http://www.zhangxiaojian.name/wp-content/uploads/2016/03/result.png)
 按照顺序，read cmmitted级别的可以vacuum掉，repeatable read的不能vacuum。
 ####四 修改的文件
